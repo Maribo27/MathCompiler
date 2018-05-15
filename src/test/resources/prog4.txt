@@ -1,0 +1,15 @@
+begin {
+print("prog4");
+int l = 1;
+int m = 89;
+while (m > l) {
+print(m);
+if (m % 2 != 0) {
+m = m - 1;
+}
+l = l + 1;
+}
+print(m);
+print("\n");
+print(l);
+}

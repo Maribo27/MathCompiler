@@ -1,0 +1,12 @@
+begin {
+    print("prog3");
+    int l = 1;
+    int m = 89;
+    int y;
+    if (m > l) {
+        y = l - m;
+    } else {
+        y = m * l;
+    }
+    print(y);
+}
