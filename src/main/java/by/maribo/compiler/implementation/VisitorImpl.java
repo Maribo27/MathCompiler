@@ -1,51 +1,36 @@
-package by.maribo.compiler;
+package by.maribo.compiler.implementation;
 
 import by.maribo.compiler.grammar.MathGrammarBaseVisitor;
 import by.maribo.compiler.grammar.MathGrammarParser;
+import by.maribo.compiler.variable.Type;
+import by.maribo.compiler.variable.Variable;
+import by.maribo.compiler.variable.VariableNotFoundException;
+import by.maribo.compiler.variable.Variables;
 
-import javax.swing.*;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-
-import static by.maribo.compiler.Text.*;
+import java.util.Objects;
 
 public class VisitorImpl extends MathGrammarBaseVisitor<String> {
 
-	private List<String> errors = new ArrayList<>();
 	private Variables variables = new Variables();
 	private Map<String, String> functions = new HashMap<>();
 	private Map<String, MathGrammarParser.FunctionSignatureContext> functionSignatures = new HashMap<>();
 
 	@Override
 	public String visitProgram(MathGrammarParser.ProgramContext ctx) {
-
-		StringBuilder buffer1 = new StringBuilder();
+		StringBuilder functions = new StringBuilder();
 		for (MathGrammarParser.FunctionReturnContext context : ctx.functionReturn()) {
-			buffer1.append(visitFunctionReturn(context));
+			functions.append(visitFunctionReturn(context));
 		}
+
 		for (MathGrammarParser.FunctionNonReturnContext context : ctx.functionNonReturn()) {
-			buffer1.append(visitFunctionNonReturn(context));
+			functions.append(visitFunctionNonReturn(context));
 		}
 
-		StringBuilder error = new StringBuilder();
-
-		if (errors.size() > 0) {
-			for (String string : errors) {
-				error.append(string).append("\n");
-			}
-			JOptionPane.showMessageDialog(null, error.toString());
-		}
-
-		return PROGRAM +
-				visitBlock(ctx.block()) +
-				buffer1 +
-				INT_CLASS +
-				FLOAT_CLASS +
-				DOUBLE_CLASS +
-				EXCEPTION +
-				"\n}";
+		return visitBlock(ctx.block()) +
+				functions.toString() +
+				ClassBuilder.createEndOfClass();
 	}
 
 	@Override
@@ -56,7 +41,7 @@ public class VisitorImpl extends MathGrammarBaseVisitor<String> {
 		for (MathGrammarParser.ContentContext context : ctx.content()) {
 			buffer.append(visitContent(context)).append("\n");
 		}
-		buffer.append("}\n");
+		buffer.append("}");
 
 		variables.decrease();
 		return buffer.toString();
@@ -79,20 +64,18 @@ public class VisitorImpl extends MathGrammarBaseVisitor<String> {
 			return visitIfBlock(ctx.ifBlock());
 		} else if (ctx.whileBlock() != null) {
 			return visitWhileBlock(ctx.whileBlock());
-		} else {
-			return "";
 		}
+		throw new WrongContentException("Wrong type of content");
 	}
 
 	@Override
 	public String visitMathExpression(MathGrammarParser.MathExpressionContext ctx) {
-		StringBuilder stringBuilder = new StringBuilder();
 		if (ctx.getChildCount() == 3) {
-			stringBuilder.append(ctx.getChild(0).getText());
-			stringBuilder.append(ctx.getChild(1).getText());
-			stringBuilder.append(ctx.getChild(2).getText());
+			return ctx.getChild(0).getText() +
+					ctx.getChild(1).getText() +
+					ctx.getChild(2).getText();
 		}
-		return stringBuilder.toString();
+		throw new WrongExpressionException("Cannot get math expression " + ctx.getText());
 	}
 
 	@Override
@@ -114,83 +97,100 @@ public class VisitorImpl extends MathGrammarBaseVisitor<String> {
 
 	@Override
 	public String visitExpressionInBracket(MathGrammarParser.ExpressionInBracketContext ctx) {
-		StringBuilder s = new StringBuilder();
-		s.append("(");
-		if (ctx.getChildCount() == 1) {
-			if (variables.get(ctx.getChild(0).getText()) == null) {
-				errors.add("Error: cant find variable " + ctx.getChild(0).getText());
-			}
-			s.append(ctx.getChild(0).getText());
-		} else if (ctx.math() != null) {
-			s.append(visitMath(ctx.math()));
-		} else {
-			return "";
+		String text = ctx.getChild(1).getText();
+		if (!text.startsWith("(")) {
+			text = "(" + text + ")";
 		}
-		s.append(")");
-		return s.toString();
+		return text;
 	}
 
 	@Override
 	public String visitMathVariable(MathGrammarParser.MathVariableContext ctx) {
-		if (ctx.getChildCount() == 1) {
-			if (variables.get(ctx.getChild(0).getText()) == null) {
-				errors.add("Error: cant find variable " + ctx.getChild(0).getText());
-			}
-			return ctx.getChild(0).getText();
+		if (ctx.NAME() != null) {
+			variables.get(ctx.NAME().getText());
+			return ctx.NAME().getText();
+		} else if (ctx.NUMBER() != null) {
+			return ctx.NUMBER().getText();
 		} else if (ctx.mathExpression() != null) {
 			return visitMathExpression(ctx.mathExpression());
 		} else if (ctx.expressionInBracket() != null) {
 			return visitExpressionInBracket(ctx.expressionInBracket());
-		} else {
-			return "";
 		}
+		throw new MathVariableNotFoundException("Cannot get variable " + ctx.getChild(0).getText());
 	}
 
 	@Override
 	public String visitDeclarationInt(MathGrammarParser.DeclarationIntContext ctx) {
-		String buffer = "";
-		if (variables.get(ctx.NAME().getText()) != null) {
-			if (ctx.INT() != null) {
-				errors.add("Initialize error: Variable " + ctx.NAME().getText() + " already used");
-			} else if (!variables.get(ctx.NAME().getText()).equalsIgnoreCase("int")) {
-				errors.add("Cast error:  variable " + ctx.NAME().getText() + " is not int");
-			}
-		} else {
-			variables.put(ctx.NAME().getText(), "int");
-			buffer += "int ";
+		if (ctx.getChildCount() > 5) {
+			throw new DeclarationException("Wrong variable name or value");
 		}
-		if (ctx.expression().functionCall() != null) {
-			if (functions.get(ctx.expression().functionCall().NAME().getText()) != null) {
-				if (!functions.get(ctx.expression().functionCall().NAME().getText()).equalsIgnoreCase("int")) {
-					errors.add("Cast error: function " + ctx.expression().functionCall().NAME().getText() + " return not int");
+		String buffer = "";
+		String variable = ctx.NAME().getText();
+
+		try {
+			Variable var = variables.get(variable);
+			if (ctx.INT() != null) {
+				throw new DeclarationException("Initialize error: variable " + variable + " is exist");
+			} else {
+				boolean castError = var.getType() != Type.INT &&
+						(ctx.expression() == null || ctx.expression().math() == null || ctx.expression().math().EXPONENTIATION() == null);
+				if (castError) {
+					throw new DeclarationException("Cast error: variable " + variable + " is not int");
 				}
 			}
+		} catch (VariableNotFoundException e) {
+			variables.put(Type.INT, variable);
+			buffer += "int ";
 		}
-		buffer += ctx.NAME().getText() + " = " + visitExpression(ctx.expression()) + ";";
+		buffer += variable;
+		if (ctx.expression() != null) {
+			if (ctx.expression().functionCall() != null) {
+				MathGrammarParser.FunctionCallContext functionCallContext = ctx.expression().functionCall();
+				String functionCallName = functionCallContext.NAME().getText();
+				if (functions.get(functionCallName) != null) {
+					if (!functions.get(functionCallName).equalsIgnoreCase("int")) {
+						throw new DeclarationException("Cast error: function " + functionCallName + " return not int");
+					}
+				}
+			}
+			buffer += " = " + visitExpression(ctx.expression());
+		}
+		buffer += ";";
 		return buffer;
 	}
 
 	@Override
 	public String visitDeclarationDouble(MathGrammarParser.DeclarationDoubleContext ctx) {
 		String buffer = "";
-		if (variables.get(ctx.NAME().getText()) != null) {
+		String variable = ctx.NAME().getText();
+
+		try {
+			Variable var = variables.get(variable);
 			if (ctx.DOUBLE() != null) {
-				errors.add("Initialize error: Variable " + ctx.NAME().getText() + " already used");
-			} else if (!variables.get(ctx.NAME().getText()).equalsIgnoreCase("double")) {
-				errors.add("Cast error:  variable " + ctx.NAME().getText() + " is not double");
+				throw new DeclarationException("Initialize error: variable " + variable + " is exist");
+			} else if (var.getType() != Type.DOUBLE) {
+				throw new DeclarationException("Cast error: variable " + variable + " is not double");
 			}
-		} else {
-			variables.put(ctx.NAME().getText(), "double");
+		} catch (VariableNotFoundException e) {
+			variables.put(Type.DOUBLE, variable);
 			buffer += "double ";
 		}
-		if (ctx.expression().functionCall() != null) {
-			if (functions.get(ctx.expression().functionCall().NAME().getText()) != null) {
-				if (!functions.get(ctx.expression().functionCall().NAME().getText()).equalsIgnoreCase("double")) {
-					errors.add("Cast error: function " + ctx.expression().functionCall().NAME().getText() + " return not double");
+		buffer += variable;
+		if (ctx.expression() != null) {
+			if (ctx.expression().functionCall() != null) {
+				MathGrammarParser.FunctionCallContext functionCallContext = ctx.expression().functionCall();
+				if (functionCallContext != null) {
+					String functionCallName = functionCallContext.NAME().getText();
+					if (functions.get(functionCallName) != null) {
+						if (!functions.get(functionCallName).equalsIgnoreCase("double")) {
+							throw new DeclarationException("Cast error: function " + functionCallName + " return not double");
+						}
+					}
 				}
 			}
+			buffer += " = " + visitExpression(ctx.expression());
 		}
-		buffer += ctx.NAME().getText() + " = " + visitExpression(ctx.expression()) + ";";
+		buffer += ";";
 		return buffer;
 
 	}
@@ -198,24 +198,35 @@ public class VisitorImpl extends MathGrammarBaseVisitor<String> {
 	@Override
 	public String visitDeclarationFloat(MathGrammarParser.DeclarationFloatContext ctx) {
 		String buffer = "";
-		if (variables.get(ctx.NAME().getText()) != null) {
+		String variable = ctx.NAME().getText();
+
+		try {
+			Variable var = variables.get(variable);
 			if (ctx.FLOAT() != null) {
-				errors.add("Initialize error: Variable " + ctx.NAME().getText() + " already used");
-			} else if (!variables.get(ctx.NAME().getText()).equalsIgnoreCase("float")) {
-				errors.add("Cast error:  variable " + ctx.NAME().getText() + " is not float");
+				throw new DeclarationException("Initialize error: variable " + variable + " is exist");
+			} else if (var.getType() != Type.FLOAT) {
+				throw new DeclarationException("Cast error: variable " + variable + " is not float");
 			}
-		} else {
-			variables.put(ctx.NAME().getText(), "float");
+		} catch (VariableNotFoundException e) {
+			variables.put(Type.FLOAT, variable);
 			buffer += "float ";
 		}
-		if (ctx.expression().functionCall() != null) {
-			if (functions.get(ctx.expression().functionCall().NAME().getText()) != null) {
-				if (!functions.get(ctx.expression().functionCall().NAME().getText()).equalsIgnoreCase("float")) {
-					errors.add("Cast error: function " + ctx.expression().functionCall().NAME().getText() + " return not float");
+		buffer += variable;
+		if (ctx.expression() != null) {
+			if (ctx.expression().functionCall() != null) {
+				MathGrammarParser.FunctionCallContext functionCallContext = ctx.expression().functionCall();
+				if (functionCallContext != null) {
+					String functionCallName = functionCallContext.NAME().getText();
+					if (functions.get(functionCallName) != null) {
+						if (!functions.get(functionCallName).equalsIgnoreCase("float")) {
+							throw new DeclarationException("Cast error: function " + functionCallName + " return not float");
+						}
+					}
 				}
 			}
+			buffer += " = " + visitExpression(ctx.expression());
 		}
-		buffer += ctx.NAME().getText() + " = " + visitExpression(ctx.expression()) + ";";
+		buffer += ";";
 		return buffer;
 	}
 
@@ -229,9 +240,8 @@ public class VisitorImpl extends MathGrammarBaseVisitor<String> {
 			return "\tSystem.out.println(" + ctx.LINE().getText() + ");";
 		} else if (ctx.math() != null) {
 			return "\tSystem.out.println(" + visitMath(ctx.math()) + ");";
-		} else {
-			return "";
 		}
+		throw new PrintException("Cannot print this information: " + ctx.getText());
 	}
 
 	@Override
@@ -242,15 +252,16 @@ public class VisitorImpl extends MathGrammarBaseVisitor<String> {
 	@Override
 	public String visitFunctionCall(MathGrammarParser.FunctionCallContext ctx) {
 		String buffer = "";
-		if (functions.get(ctx.NAME().getText()) == null) {
-			errors.add("Initialize error: cant find function " + ctx.NAME().getText());
-		} else if (!checkSignatures(ctx.inputSignature(), functionSignatures.get(ctx.NAME().getText()))) {
-			errors.add("Error: cant find such arguments in function " + ctx.NAME().getText());
+		String name = ctx.NAME().getText();
+		if (functions.get(name) == null) {
+			throw new FunctionException("Initialize error: cannot find function " + name);
+		} else if (!checkSignatures(ctx.inputSignature(), functionSignatures.get(name))) {
+			throw new FunctionException("Error: cant find such arguments in function " + name);
 		}
 		if (ctx.inputSignature() != null) {
-			buffer += ctx.NAME().getText() + visitInputSignature(ctx.inputSignature());
+			buffer += name + "(" + visitInputSignature(ctx.inputSignature())+ ")";
 		} else {
-			buffer += ctx.NAME().getText() + "()";
+			buffer += name + "()";
 		}
 		return buffer;
 	}
@@ -282,22 +293,28 @@ public class VisitorImpl extends MathGrammarBaseVisitor<String> {
 	@Override
 	public String visitFunctionReturn(MathGrammarParser.FunctionReturnContext ctx) {
 		String buffer = "";
-		if (functions.get(ctx.NAME().getText()) == null) {
-			functions.put(ctx.NAME().getText(), visitType(ctx.type()));
+		String name = ctx.NAME().getText();
+		MathGrammarParser.TypeContext type = ctx.type();
+		if (functions.get(name) == null) {
+			functions.put(name, visitType(type));
 		} else {
-			errors.add("Function name " + ctx.NAME().getText() + " already used");
+			throw new FunctionException("Function name " + name + " already used");
 		}
-		buffer += "\nprivate " + visitType(ctx.type()) + " " + ctx.NAME().getText();
-		if (ctx.functionSignature() != null) {
-			buffer += visitFunctionSignature(ctx.functionSignature()) + "throws Exception";
-			functionSignatures.put(ctx.NAME().getText(), ctx.functionSignature());
+		buffer += "\nprivate " + visitType(type) + " " + name;
+		MathGrammarParser.FunctionSignatureContext functionSignatureContext = ctx.functionSignature();
+		if (functionSignatureContext != null) {
+			buffer += visitFunctionSignature(functionSignatureContext) + "throws CompilerException";
+			functionSignatures.put(name, functionSignatureContext);
 		} else {
-			buffer += "() throws Exception";
+			buffer += "() throws CompilerException";
 		}
 		variables.increase();
-		if (ctx.functionSignature() != null) {
-			for (int i = 0; i < ctx.functionSignature().type().size(); i++) {
-				variables.put(ctx.functionSignature().NAME(i).getText(), ctx.functionSignature().type(i).getText());
+		if (functionSignatureContext != null) {
+			for (int i = 0; i < functionSignatureContext.type().size(); i++) {
+				String typeString = functionSignatureContext.type(i).getText();
+				Type varType = Type.valueOf(typeString.toUpperCase());
+				String varName = functionSignatureContext.NAME(i).getText();
+				variables.put(varType, varName);
 			}
 		}
 		buffer += visitBlockReturn(ctx.blockReturn());
@@ -310,18 +327,22 @@ public class VisitorImpl extends MathGrammarBaseVisitor<String> {
 		if (functions.get(ctx.NAME().getText()) == null) {
 			functions.put(ctx.NAME().getText(), "void");
 		} else {
-			errors.add("Function name " + ctx.NAME().getText() + " already used");
+			throw new FunctionException("Function name " + ctx.NAME().getText() + " already used");
 		}
 		buffer += "private void " + ctx.NAME().getText();
-		if (ctx.functionSignature() != null) {
-			buffer += visitFunctionSignature(ctx.functionSignature()) + "throws Exception";
-			functionSignatures.put(ctx.NAME().getText(), ctx.functionSignature());
+		MathGrammarParser.FunctionSignatureContext functionSignatureContext = ctx.functionSignature();
+		if (functionSignatureContext != null) {
+			buffer += visitFunctionSignature(functionSignatureContext) + "throws CompilerException";
+			functionSignatures.put(ctx.NAME().getText(), functionSignatureContext);
 		} else {
-			buffer += "() throws Exception";
+			buffer += "() throws CompilerException";
 		}
 		variables.increase();
-		for (int i = 0; i < ctx.functionSignature().type().size(); i++) {
-			variables.put(ctx.functionSignature().NAME(i).getText(), ctx.functionSignature().type(i).getText());
+		for (int i = 0; i < Objects.requireNonNull(functionSignatureContext).type().size(); i++) {
+			String typeString = functionSignatureContext.type(i).getText();
+			Type type = Type.valueOf(typeString.toUpperCase());
+			String name = functionSignatureContext.NAME(i).getText();
+			variables.put(type, name);
 		}
 		buffer += visitBlockNonReturn(ctx.blockNonReturn());
 		return buffer;
@@ -336,7 +357,7 @@ public class VisitorImpl extends MathGrammarBaseVisitor<String> {
 		buffer.append("return ").append(ctx.NAME().getText()).append(";").append("\n}\n");
 
 		if (variables.get(ctx.NAME().getText()) == null) {
-			errors.add("Error: cant find variable " + ctx.NAME().getText() + " at return");
+			throw new BlockException("Error: cannot find variable " + ctx.NAME().getText() + " at return");
 		}
 		variables.decrease();
 		return buffer.toString();
@@ -349,7 +370,7 @@ public class VisitorImpl extends MathGrammarBaseVisitor<String> {
 		for (MathGrammarParser.ContentContext context : ctx.content()) {
 			buffer.append(visitContent(context)).append("\n");
 		}
-		buffer.append("return;\n}\n");
+		buffer.append("}\n");
 
 		variables.decrease();
 		return buffer.toString();
@@ -411,17 +432,23 @@ public class VisitorImpl extends MathGrammarBaseVisitor<String> {
 			return visitFunctionCall(ctx.functionCall());
 		} else if (ctx.math() != null) {
 			return visitMath(ctx.math());
-		} else if (ctx.getChildCount() == 1) {
-			if (variables.get(ctx.getChild(0).getText()) == null) {
-				errors.add("Error: cant find variable " + ctx.getChild(0).getText());
+		} else if (ctx.NAME() != null) {
+			String variable = ctx.NAME().getText();
+			try {
+				variables.get(variable);
+			} catch (VariableNotFoundException e) {
+				throw new WrongExpressionException("Error: cannot find variable " + variable);
 			}
+			return variable;
+		} else if (ctx.getChildCount() == 1) {
 			return ctx.getChild(0).getText();
 		} else {
 			return "";
 		}
 	}
 
-	private boolean checkSignatures(MathGrammarParser.InputSignatureContext in, MathGrammarParser.FunctionSignatureContext sig) {
+	private boolean checkSignatures(MathGrammarParser.InputSignatureContext
+			                                in, MathGrammarParser.FunctionSignatureContext sig) {
 		boolean check = true;
 		if (sig == null && in == null) {
 			return true;
@@ -429,8 +456,10 @@ public class VisitorImpl extends MathGrammarBaseVisitor<String> {
 			return false;
 		} else if (in.NAME().size() == sig.NAME().size()) {
 			for (int i = 0; i < sig.type().size(); i++) {
-				if (variables.get(in.NAME(i).getText()) == null
-						|| !variables.get(in.NAME(i).getText()).equalsIgnoreCase(visitType(sig.type(i)))) {
+				String name = in.NAME(i).getText();
+				String visitType = visitType(sig.type(i));
+				Type type = variables.get(name).getType();
+				if (variables.get(name) == null || type != Type.valueOf(visitType.toUpperCase())) {
 					check = false;
 				}
 			}

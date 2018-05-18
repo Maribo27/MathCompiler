@@ -1,9 +1,0 @@
-begin {
-print("prog2");
-int l = 1;
-int m = 89;
-print(l+m);
-
-int k = l * m * (90-80);
-print(k);
-}

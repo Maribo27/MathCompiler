@@ -1,11 +1,12 @@
-package by.maribo.compiler;
+package by.maribo.compiler.implementation;
 
-final class Text {
+public final class ClassBuilder {
 
-	static final String PROGRAM = "public class Program {\n" +
-			"\tpublic static void main(String[] args) {\n" +
+	private static final String PROGRAM_ONE = "\tpublic static void main(String[] args) {\n" +
 			"\t\ttry {\n" +
-			"\t\t\tnew Program().start();\n" +
+			"\t\t\tnew ";
+
+	private static final String PROGRAM_TWO = "().start();\n" +
 			"\t\t} catch (CompilerException e) {\n" +
 			"\t\t\tSystem.err.println(e.getMessage());\n" +
 			"\t\t}\n" +
@@ -13,7 +14,7 @@ final class Text {
 			"\t\n" +
 			"\tprivate void start() ";
 
-	static final String INT_CLASS = "\n" +
+	private static final String INT_CLASS = "\n" +
 			"\n" +
 			"\tpublic class Int {\n" +
 			"\t\tprivate int intNumber;\n" +
@@ -36,7 +37,7 @@ final class Text {
 			"\t\t}\n" +
 			"\t}";
 
-	static final String FLOAT_CLASS = "\n" +
+	private static final String FLOAT_CLASS = "\n" +
 			"\n" +
 			"\tpublic class Float {\n" +
 			"\t\tprivate float floatNumber;\n" +
@@ -59,7 +60,7 @@ final class Text {
 			"\t\t}\n" +
 			"\t}";
 
-	static final String DOUBLE_CLASS = "\n" +
+	private static final String DOUBLE_CLASS = "\n" +
 			"\t\n" +
 			"\tpublic class Double {\n" +
 			"\t\tprivate double doubleNumber;\n" +
@@ -82,7 +83,7 @@ final class Text {
 			"\t\t}\n" +
 			"\t}";
 
-	static final String EXCEPTION = "\n" +
+	private static final String EXCEPTION = "\n" +
 			"\n" +
 			"\tpublic class CompilerException extends RuntimeException {\n" +
 			"\t\tpublic CompilerException(String message) {\n" +
@@ -90,6 +91,21 @@ final class Text {
 			"\t\t}\n" +
 			"\t}";
 
-	private Text() {
+	public static String createTopOfClass(String name) {
+		return "public class " + name + " {\n" +
+				PROGRAM_ONE +
+				name +
+				PROGRAM_TWO;
+	}
+
+	static String createEndOfClass() {
+		return INT_CLASS +
+				FLOAT_CLASS +
+				DOUBLE_CLASS +
+				EXCEPTION +
+				"\n}";
+	}
+
+	private ClassBuilder() {
 	}
 }

@@ -65,7 +65,7 @@ declarationDouble: (DOUBLE? NAME ASSIGNMENT expression | DOUBLE NAME) DOT_COMMA;
 
 print: PRINT OPEN_BRACKET (NUMBER | NAME | LINE | math) CLOSE_BRACKET DOT_COMMA;
 
-inputSignature: OPEN_BRACKET NAME (COMMA NAME)* CLOSE_BRACKET;
+inputSignature: NAME (COMMA NAME)*;
 functionCall: NAME OPEN_BRACKET (inputSignature)? CLOSE_BRACKET DOT_COMMA;
 
 type: INT | FLOAT | DOUBLE;
@@ -84,7 +84,7 @@ elseBlock: ELSE block;
 
 whileBlock: WHILE OPEN_BRACKET (compare|negationCompare) CLOSE_BRACKET block;
 
-expressionInBracket : OPEN_BRACKET (math | NUMBER) CLOSE_BRACKET DOT_COMMA;
+expressionInBracket : OPEN_BRACKET (math | NUMBER) CLOSE_BRACKET;
 
 expression:
         math

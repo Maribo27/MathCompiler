@@ -1,4 +1,8 @@
-import by.maribo.compiler.VisitorImpl;
+package by.maribo.compiler;
+
+import by.maribo.compiler.implementation.ClassBuilder;
+import by.maribo.compiler.implementation.VisitorException;
+import by.maribo.compiler.implementation.VisitorImpl;
 import by.maribo.compiler.grammar.MathGrammarLexer;
 import by.maribo.compiler.grammar.MathGrammarParser;
 import by.maribo.compiler.grammar.MathGrammarVisitor;
@@ -22,13 +26,18 @@ public class Main {
 			MathGrammarVisitor visitor = new VisitorImpl();
 			String output = (String) visitor.visit(tree);
 
-			int beginIndex = args[0].lastIndexOf('/');
+			int beginIndex = args[0].lastIndexOf('/') + 1;
 			int endIndex = args[0].lastIndexOf('.');
-			FileWriter fileWriter = new FileWriter("out/" + args[0].substring(beginIndex, endIndex) + ".java");
-			fileWriter.write(output);
+			String name = args[0].substring(beginIndex, endIndex);
+			String top = ClassBuilder.createTopOfClass(name);
+
+			FileWriter fileWriter = new FileWriter(name + ".java");
+			fileWriter.write(top + output);
 			fileWriter.close();
 		} catch (IOException e) {
-			e.printStackTrace();
+			System.out.println("Cannot load files: " + e.getMessage());
+		} catch (VisitorException e) {
+			System.out.println("Compiler error : " + e.getMessage());
 		}
 	}
 }
