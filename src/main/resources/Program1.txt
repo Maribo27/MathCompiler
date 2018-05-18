@@ -1,0 +1,16 @@
+begin {
+    print("prog1");
+    int l = 25;
+    int m = 89;
+    int p = 0;
+    if (m > l) {
+        write(l);
+    } else {
+        print("hello");
+        p = l + m;
+    }
+    print(p);
+}
+function write(int a){
+    print(a)
+}
